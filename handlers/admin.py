@@ -2,13 +2,13 @@ import logging
 import asyncio
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 import database as db
 import keyboards as kb
-from config import ADMIN_ID, CRYPTO_CURRENCY, PRICE_PER_ACCOUNT
+from config import ADMIN_ID, CRYPTO_CURRENCY
 from services.cryptobot import create_invoice
 from services.telegram_auth import change_password, listen_for_codes
 
@@ -20,26 +20,48 @@ def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
 
 
+def e(emoji_id: str, fallback: str) -> str:
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
+E_STATS    = e("5203993413346680064", "📊")
+E_USERS    = e("5244837092042750681", "👥")
+E_ACCS     = e("5213179235996294999", "📱")
+E_WITHDRAW = e("5210956306952758910", "💸")
+E_PRICE    = e("5307843983102204243", "💵")
+E_CHECK    = e("5206607081334906820", "✅")
+E_REJECT   = e("5210952531676504517", "❌")
+E_PENDING  = e("5386367538735104399", "⏳")
+E_BALANCE  = e("5472250091332993630", "💰")
+E_CODES    = e("5463424023734014980", "🔑")
+E_LOCK     = e("5213179235996294999", "🔒")
+E_USER     = e("5197269100878907942", "👤")
+E_DATE     = e("5472279086657199080", "📅")
+E_ID       = e("5440410042773824003", "🆔")
+
+
 class AdminStates(StatesGroup):
     waiting_new_password = State()
     waiting_pay_check = State()
     waiting_new_price = State()
 
 
-# ========== ADMIN COMMAND ==========
+# ========== ADMIN PANEL ==========
 
 async def _admin_panel_text() -> str:
     stats = await db.get_bot_stats()
     price = await db.get_price()
     return (
         f"🔧 <b>Панель администратора</b>\n\n"
-        f"👥 Пользователей: <b>{stats['total_users']}</b>\n"
-        f"📱 Аккаунтов всего: <b>{stats['total_accounts']}</b>\n"
-        f"✅ Принято: <b>{stats['approved_accounts']}</b>\n"
-        f"⏳ На проверке: <b>{stats['pending_accounts']}</b>\n"
-        f"💸 Ожидают выплаты: <b>{stats['pending_withdrawals']}</b>\n"
-        f"💰 Баланс юзеров: <b>{stats['total_balance']:.2f} {CRYPTO_CURRENCY}</b>\n\n"
-        f"💵 Текущий прайс: <b>{price} {CRYPTO_CURRENCY}</b>"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E_USERS} Пользователей: <b>{stats['total_users']}</b>\n"
+        f"{E_ACCS} Аккаунтов всего: <b>{stats['total_accounts']}</b>\n"
+        f"{E_CHECK} Принято: <b>{stats['approved_accounts']}</b>\n"
+        f"{E_PENDING} На проверке: <b>{stats['pending_accounts']}</b>\n"
+        f"{E_WITHDRAW} Ожидают выплаты: <b>{stats['pending_withdrawals']}</b>\n"
+        f"{E_BALANCE} Баланс юзеров: <b>{stats['total_balance']:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E_PRICE} Текущий прайс: <b>{price} {CRYPTO_CURRENCY}</b>"
     )
 
 
@@ -74,13 +96,15 @@ async def admin_stats(callback: CallbackQuery):
         return
     stats = await db.get_bot_stats()
     await callback.message.edit_text(
-        f"📊 <b>Подробная статистика</b>\n\n"
-        f"👥 Пользователей: <b>{stats['total_users']}</b>\n"
-        f"📱 Аккаунтов всего: <b>{stats['total_accounts']}</b>\n"
-        f"✅ Принято: <b>{stats['approved_accounts']}</b>\n"
-        f"⏳ На проверке: <b>{stats['pending_accounts']}</b>\n"
-        f"💸 Заявок на вывод: <b>{stats['pending_withdrawals']}</b>\n"
-        f"💰 Баланс всех юзеров: <b>{stats['total_balance']:.2f} {CRYPTO_CURRENCY}</b>",
+        f"{E_STATS} <b>Подробная статистика</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E_USERS} Пользователей: <b>{stats['total_users']}</b>\n"
+        f"{E_ACCS} Аккаунтов всего: <b>{stats['total_accounts']}</b>\n"
+        f"{E_CHECK} Принято: <b>{stats['approved_accounts']}</b>\n"
+        f"{E_PENDING} На проверке: <b>{stats['pending_accounts']}</b>\n"
+        f"{E_WITHDRAW} Заявок на вывод: <b>{stats['pending_withdrawals']}</b>\n"
+        f"{E_BALANCE} Баланс юзеров: <b>{stats['total_balance']:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"━━━━━━━━━━━━━━━",
         reply_markup=kb.admin_back(),
         parse_mode="HTML"
     )
@@ -95,9 +119,11 @@ async def admin_set_price_start(callback: CallbackQuery, state: FSMContext):
     current_price = await db.get_price()
     await state.set_state(AdminStates.waiting_new_price)
     await callback.message.edit_text(
-        f"💰 <b>Изменение прайса</b>\n\n"
-        f"Текущая цена: <b>{current_price} {CRYPTO_CURRENCY}</b>\n\n"
-        f"Введи новую цену за аккаунт (число):",
+        f"{E_PRICE} <b>Изменение прайса</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"Текущая цена: <b>{current_price} {CRYPTO_CURRENCY}</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"Введи новую цену 👇",
         reply_markup=kb.cancel_admin_kb(),
         parse_mode="HTML"
     )
@@ -118,7 +144,7 @@ async def admin_set_price_execute(message: Message, state: FSMContext):
     await db.set_price(new_price)
     await state.clear()
     await message.answer(
-        f"✅ Цена обновлена: <b>{new_price} {CRYPTO_CURRENCY}</b>",
+        f"{E_CHECK} Цена обновлена: <b>{new_price} {CRYPTO_CURRENCY}</b>",
         reply_markup=kb.admin_menu(),
         parse_mode="HTML"
     )
@@ -132,16 +158,19 @@ async def admin_users(callback: CallbackQuery):
         return
     users = await db.get_all_users()
     if not users:
-        await callback.message.edit_text("👥 Пользователей нет.", reply_markup=kb.admin_back())
+        await callback.message.edit_text(
+            f"{E_USERS} Пользователей пока нет.",
+            reply_markup=kb.admin_back(),
+            parse_mode="HTML"
+        )
         return
 
-    text = "👥 <b>Все пользователи:</b>\n\n"
+    text = f"{E_USERS} <b>Все пользователи:</b>\n\n"
     for u in users[:20]:
-        # (user_id, username, full_name, balance, total_submitted, total_earned, registered_at)
         name = u[2] or u[1] or "Без имени"
         text += (
-            f"👤 <b>{name}</b> (@{u[1] or '—'})\n"
-            f"   🆔 <code>{u[0]}</code> | 📱 {u[4]} шт | 💰 {u[3]:.2f} {CRYPTO_CURRENCY}\n\n"
+            f"{E_USER} <b>{name}</b> (@{u[1] or '—'})\n"
+            f"{E_ID} <code>{u[0]}</code> | {E_ACCS} {u[4]} шт | {E_BALANCE} {u[3]:.2f} {CRYPTO_CURRENCY}\n\n"
         )
 
     if len(users) > 20:
@@ -158,7 +187,11 @@ async def admin_accounts(callback: CallbackQuery):
         return
     accounts = await db.get_all_accounts()
     if not accounts:
-        await callback.message.edit_text("📱 Аккаунтов нет.", reply_markup=kb.admin_back())
+        await callback.message.edit_text(
+            f"{E_ACCS} Аккаунтов пока нет.",
+            reply_markup=kb.admin_back(),
+            parse_mode="HTML"
+        )
         return
 
     status_map = {
@@ -168,19 +201,16 @@ async def admin_accounts(callback: CallbackQuery):
         'processing': '🔄',
     }
 
-    text = "📱 <b>Все аккаунты (последние 15):</b>\n\n"
+    text = f"{E_ACCS} <b>Все аккаунты (последние 15):</b>\n\n"
     for acc in accounts[:15]:
-        # (id, user_id, phone, status, session_data, submitted_at, price, username, full_name)
         icon = status_map.get(acc[3], '❓')
         name = acc[8] or acc[7] or "—"
         date = acc[5][:10] if acc[5] else "—"
         text += (
             f"{icon} #{acc[0]} <code>{acc[2]}</code>\n"
-            f"   👤 {name} | 📅 {date}\n\n"
+            f"   {E_USER} {name} | {E_DATE} {date}\n\n"
         )
 
-    # Кнопки для выбора аккаунта
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = []
     for acc in accounts[:10]:
         icon = status_map.get(acc[3], '❓')
@@ -204,22 +234,28 @@ async def admin_account_detail(callback: CallbackQuery):
         await callback.answer("Аккаунт не найден", show_alert=True)
         return
 
-    status_map = {'pending': '⏳ Ожидает', 'approved': '✅ Принят', 'rejected': '❌ Отклонён'}
-    has_session = "✅ Есть" if acc[4] else "❌ Нет"
+    status_map = {
+        'pending': f'{E_PENDING} Ожидает',
+        'approved': f'{E_CHECK} Принят',
+        'rejected': '❌ Отклонён'
+    }
+    has_session = f"{E_CHECK} Есть" if acc[4] else "❌ Нет"
 
     await callback.message.edit_text(
-        f"📱 <b>Аккаунт #{account_id}</b>\n\n"
+        f"{E_ACCS} <b>Аккаунт #{account_id}</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
         f"📞 Номер: <code>{acc[2]}</code>\n"
-        f"📊 Статус: {status_map.get(acc[3], acc[3])}\n"
+        f"{E_STATS} Статус: {status_map.get(acc[3], acc[3])}\n"
         f"💾 Сессия: {has_session}\n"
-        f"💰 Выплата: {acc[6]} {CRYPTO_CURRENCY}\n"
-        f"📅 Сдан: {acc[5][:16] if acc[5] else '—'}",
+        f"{E_BALANCE} Выплата: <b>{acc[6]} {CRYPTO_CURRENCY}</b>\n"
+        f"{E_DATE} Сдан: {acc[5][:16] if acc[5] else '—'}\n"
+        f"━━━━━━━━━━━━━━━",
         reply_markup=kb.admin_account_actions(account_id, acc[2]),
         parse_mode="HTML"
     )
 
 
-# ========== APPROVE / REJECT ACCOUNT ==========
+# ========== APPROVE / REJECT ==========
 
 @router.callback_query(F.data.startswith("admin_approve_"))
 async def admin_approve_account(callback: CallbackQuery, bot: Bot):
@@ -234,21 +270,21 @@ async def admin_approve_account(callback: CallbackQuery, bot: Bot):
     await db.update_account_status(account_id, 'approved')
     await callback.answer("✅ Аккаунт одобрен, баланс начислен", show_alert=True)
 
-    # Уведомляем пользователя
     try:
         await bot.send_message(
             acc[1],
-            f"✅ <b>Ваш аккаунт принят!</b>\n\n"
+            f"{E_CHECK} <b>Аккаунт принят!</b>\n\n"
             f"📞 Номер: <code>{acc[2]}</code>\n"
-            f"💰 Начислено: <b>{acc[6]} {CRYPTO_CURRENCY}</b>",
+            f"{E_BALANCE} Начислено: <b>{acc[6]} {CRYPTO_CURRENCY}</b>",
             parse_mode="HTML"
         )
-    except Exception as e:
-        logger.error(f"Не удалось уведомить пользователя: {e}")
+    except Exception as ex:
+        logger.error(f"Не удалось уведомить пользователя: {ex}")
 
     await callback.message.edit_text(
-        f"✅ Аккаунт #{account_id} одобрен.",
-        reply_markup=kb.admin_back()
+        f"{E_CHECK} Аккаунт #{account_id} одобрен, баланс начислен.",
+        reply_markup=kb.admin_back(),
+        parse_mode="HTML"
     )
 
 
@@ -266,17 +302,18 @@ async def admin_reject_account(callback: CallbackQuery, bot: Bot):
         try:
             await bot.send_message(
                 acc[1],
-                f"❌ <b>Аккаунт отклонён</b>\n\n"
+                f"{E_REJECT} <b>Аккаунт отклонён</b>\n\n"
                 f"📞 Номер: <code>{acc[2]}</code>\n"
                 f"Свяжись с поддержкой для уточнения причины.",
                 parse_mode="HTML"
             )
-        except Exception as e:
-            logger.error(f"Не удалось уведомить пользователя: {e}")
+        except Exception as ex:
+            logger.error(f"Не удалось уведомить пользователя: {ex}")
 
     await callback.message.edit_text(
-        f"❌ Аккаунт #{account_id} отклонён.",
-        reply_markup=kb.admin_back()
+        f"{E_REJECT} Аккаунт #{account_id} отклонён.",
+        reply_markup=kb.admin_back(),
+        parse_mode="HTML"
     )
 
 
@@ -294,12 +331,13 @@ async def admin_listen_codes(callback: CallbackQuery, bot: Bot):
 
     await callback.answer("⏳ Слушаю коды 2 минуты...", show_alert=True)
     await callback.message.answer(
-        f"🔑 Начинаю слушать коды для <code>{acc[2]}</code>...\n"
-        f"⏱ Ожидание: 2 минуты",
+        f"{E_CODES} Начинаю слушать коды для <code>{acc[2]}</code>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E_PENDING} Ожидание: 2 минуты\n"
+        f"━━━━━━━━━━━━━━━",
         parse_mode="HTML"
     )
 
-    # Запускаем прослушку в фоне
     asyncio.create_task(
         listen_for_codes(acc[4], acc[2], ADMIN_ID, bot, duration=120)
     )
@@ -320,8 +358,9 @@ async def admin_change_password_start(callback: CallbackQuery, state: FSMContext
     await state.set_state(AdminStates.waiting_new_password)
     await state.update_data(account_id=account_id, session=acc[4], phone=acc[2])
     await callback.message.answer(
-        f"🔒 Смена пароля для <code>{acc[2]}</code>\n\n"
-        f"Введи новый пароль:",
+        f"{E_LOCK} <b>Смена пароля</b>\n\n"
+        f"📞 Аккаунт: <code>{acc[2]}</code>\n\n"
+        f"Введи новый пароль 👇",
         parse_mode="HTML",
         reply_markup=kb.cancel_kb()
     )
@@ -338,7 +377,7 @@ async def admin_change_password_execute(message: Message, state: FSMContext):
 
     if result["success"]:
         await message.answer(
-            f"✅ Пароль для <code>{data['phone']}</code> изменён!",
+            f"{E_CHECK} Пароль для <code>{data['phone']}</code> изменён!",
             parse_mode="HTML",
             reply_markup=kb.admin_back()
         )
@@ -359,22 +398,21 @@ async def admin_withdrawals(callback: CallbackQuery):
     withdrawals = await db.get_pending_withdrawals()
     if not withdrawals:
         await callback.message.edit_text(
-            "💸 Нет заявок на выплату.",
-            reply_markup=kb.admin_back()
+            f"{E_WITHDRAW} Заявок на выплату нет.",
+            reply_markup=kb.admin_back(),
+            parse_mode="HTML"
         )
         return
 
-    text = "💸 <b>Заявки на выплату:</b>\n\n"
+    text = f"{E_WITHDRAW} <b>Заявки на выплату:</b>\n\n"
     for w in withdrawals:
-        # (id, user_id, amount, crypto_check, status, created_at, processed_at, username, full_name)
         name = w[8] or w[7] or "—"
         date = w[5][:10] if w[5] else "—"
         text += (
-            f"#{w[0]} | {name} (@{w[7] or '—'})\n"
-            f"   💰 {w[2]:.2f} {CRYPTO_CURRENCY} | 📅 {date}\n\n"
+            f"#{w[0]} | {E_USER} {name} (@{w[7] or '—'})\n"
+            f"{E_BALANCE} {w[2]:.2f} {CRYPTO_CURRENCY} | {E_DATE} {date}\n\n"
         )
 
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
     buttons = []
     for w in withdrawals[:10]:
         buttons.append([InlineKeyboardButton(
@@ -400,11 +438,13 @@ async def admin_withdrawal_detail(callback: CallbackQuery):
 
     name = w[8] or w[7] or "—"
     await callback.message.edit_text(
-        f"💸 <b>Заявка #{withdrawal_id}</b>\n\n"
-        f"👤 {name} (@{w[7] or '—'})\n"
-        f"🆔 <code>{w[1]}</code>\n"
-        f"💰 Сумма: <b>{w[2]:.2f} {CRYPTO_CURRENCY}</b>\n"
-        f"📅 Создана: {w[5][:16] if w[5] else '—'}",
+        f"{E_WITHDRAW} <b>Заявка #{withdrawal_id}</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E_USER} {name} (@{w[7] or '—'})\n"
+        f"{E_ID} <code>{w[1]}</code>\n"
+        f"{E_BALANCE} Сумма: <b>{w[2]:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"{E_DATE} Создана: {w[5][:16] if w[5] else '—'}\n"
+        f"━━━━━━━━━━━━━━━",
         reply_markup=kb.admin_withdrawal_actions(withdrawal_id),
         parse_mode="HTML"
     )
@@ -423,7 +463,6 @@ async def admin_pay_withdrawal(callback: CallbackQuery, bot: Bot):
 
     await callback.answer("⏳ Создаю чек в CryptoBot...", show_alert=True)
 
-    # Создаём чек в CryptoBot
     result = await create_invoice(w[2], CRYPTO_CURRENCY)
 
     if not result["success"]:
@@ -433,21 +472,21 @@ async def admin_pay_withdrawal(callback: CallbackQuery, bot: Bot):
     check_url = result["pay_url"]
     await db.update_withdrawal(withdrawal_id, 'completed', check_url)
 
-    # Отправляем чек пользователю
     try:
         await bot.send_message(
             w[1],
-            f"✅ <b>Выплата #{withdrawal_id} обработана!</b>\n\n"
-            f"💰 Сумма: <b>{w[2]:.2f} {CRYPTO_CURRENCY}</b>\n\n"
+            f"{E_CHECK} <b>Выплата #{withdrawal_id} обработана!</b>\n\n"
+            f"{E_BALANCE} Сумма: <b>{w[2]:.2f} {CRYPTO_CURRENCY}</b>\n\n"
             f"🎁 Получи чек: {check_url}",
             parse_mode="HTML"
         )
-    except Exception as e:
-        logger.error(f"Не удалось отправить чек пользователю: {e}")
+    except Exception as ex:
+        logger.error(f"Не удалось отправить чек: {ex}")
 
     await callback.message.edit_text(
-        f"✅ Выплата #{withdrawal_id} выполнена!\nЧек отправлен пользователю.",
-        reply_markup=kb.admin_back()
+        f"{E_CHECK} Выплата #{withdrawal_id} выполнена!\nЧек отправлен пользователю.",
+        reply_markup=kb.admin_back(),
+        parse_mode="HTML"
     )
 
 
@@ -460,20 +499,21 @@ async def admin_reject_withdrawal(callback: CallbackQuery, bot: Bot):
     w = next((x for x in withdrawals if x[0] == withdrawal_id), None)
 
     if w:
-        # Возвращаем баланс
         await db.update_user_balance(w[1], w[2])
         await db.update_withdrawal(withdrawal_id, 'rejected')
         try:
             await bot.send_message(
                 w[1],
-                f"❌ Заявка на вывод #{withdrawal_id} отклонена.\n"
-                f"💰 {w[2]:.2f} {CRYPTO_CURRENCY} возвращено на баланс.",
+                f"{E_REJECT} Заявка на вывод #{withdrawal_id} отклонена.\n"
+                f"{E_BALANCE} {w[2]:.2f} {CRYPTO_CURRENCY} возвращено на баланс.",
                 parse_mode="HTML"
             )
-        except Exception as e:
-            logger.error(f"Ошибка уведомления: {e}")
+        except Exception as ex:
+            logger.error(f"Ошибка уведомления: {ex}")
 
     await callback.message.edit_text(
-        f"❌ Заявка #{withdrawal_id} отклонена, баланс возвращён.",
-        reply_markup=kb.admin_back()
-    )
+        f"{E_REJECT} Заявка #{withdrawal_id} отклонена, баланс возвращён.",
+        reply_markup=kb.admin_back(),
+        parse_mode="HTML"
+                                 )
+    
