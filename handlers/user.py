@@ -18,6 +18,26 @@ router = Router()
 PHONE_RE = re.compile(r"^\+7\d{10}$")
 
 
+def e(emoji_id: str, fallback: str) -> str:
+    return f'<tg-emoji emoji-id="{emoji_id}">{fallback}</tg-emoji>'
+
+
+E1  = e("5443038326535759644", "💬")   # привет
+E2  = e("5278702045883292456", "🏪")   # название/магазин
+E3  = e("5193177581888755275", "💵")   # цена
+E4  = e("5463424023734014980", "⚡️")  # выплата
+E5  = e("5197269100878907942", "👤")   # профиль
+E6  = e("5440410042773824003", "🆔")   # id
+E7  = e("5472279086657199080", "📅")   # дата
+E8  = e("5203993413346680064", "📊")   # статистика
+E9  = e("5213179235996294999", "📱")   # сдано/аккаунты
+E10 = e("5206607081334906820", "✅")   # принято
+E11 = e("5386367538735104399", "⏳")   # в обработке
+E12 = e("5472250091332993630", "💰")   # баланс
+E13 = e("5330237710655306682", "🇷🇺")  # ру номера
+E14 = e("5197371802136892976", "📩")   # проверь
+
+
 class SubmitStates(StatesGroup):
     waiting_phone = State()
     waiting_code = State()
@@ -37,10 +57,13 @@ async def cmd_start(message: Message, state: FSMContext):
     await db.get_or_create_user(user.id, user.username, user.full_name)
     price = await db.get_price()
     await message.answer(
-        f"👋 Привет, <b>{user.full_name}</b>!\n\n"
-        f"Я бот для приёма Telegram аккаунтов.\n"
-        f"💰 Цена за аккаунт: <b>{price} {CRYPTO_CURRENCY}</b>\n\n"
-        f"Выбери действие:",
+        f"{E1} Привет, <b>{user.full_name}</b>!\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E2} <b>Чучмек Скуп</b> — приём TG аккаунтов\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"{E3} Цена за аккаунт: <b>{price} {CRYPTO_CURRENCY}</b>\n"
+        f"{E4} Выплата сразу после проверки\n\n"
+        f"Выбери действие 👇",
         reply_markup=kb.main_menu(),
         parse_mode="HTML"
     )
@@ -51,7 +74,8 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.callback_query(F.data == "support")
 async def support_handler(callback: CallbackQuery):
     await callback.message.edit_text(
-        "💬 <b>Поддержка</b>\n\nНажми кнопку ниже, чтобы написать в поддержку:",
+        f"{E1} <b>Поддержка</b>\n\n"
+        f"Нажми кнопку ниже, чтобы написать в поддержку:",
         reply_markup=kb.support_kb(),
         parse_mode="HTML"
     )
@@ -66,7 +90,6 @@ async def profile_handler(callback: CallbackQuery):
         await db.get_or_create_user(callback.from_user.id)
         user_data = await db.get_user(callback.from_user.id)
 
-    # user_data: (user_id, username, full_name, balance, total_submitted, total_earned, registered_at)
     balance = user_data[3]
     total_submitted = user_data[4]
     total_earned = user_data[5]
@@ -77,15 +100,19 @@ async def profile_handler(callback: CallbackQuery):
     pending = sum(1 for a in accounts if a[3] == 'pending')
 
     await callback.message.edit_text(
-        f"👤 <b>Профиль</b>\n\n"
-        f"🆔 ID: <code>{callback.from_user.id}</code>\n"
-        f"📅 Регистрация: {registered_at}\n\n"
-        f"📊 <b>Статистика:</b>\n"
-        f"├ 📱 Сдано аккаунтов: <b>{total_submitted}</b>\n"
-        f"├ ✅ Принято: <b>{approved}</b>\n"
-        f"├ ⏳ В обработке: <b>{pending}</b>\n"
-        f"└ 💵 Заработано всего: <b>{total_earned:.2f} {CRYPTO_CURRENCY}</b>\n\n"
-        f"💰 <b>Баланс: {balance:.2f} {CRYPTO_CURRENCY}</b>",
+        f"{E5} <b>Твой профиль</b>\n\n"
+        f"{E6} ID: <code>{callback.from_user.id}</code>\n"
+        f"{E7} С нами с: {registered_at}\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E8} <b>Статистика</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E9} Сдано: <b>{total_submitted}</b>\n"
+        f"{E10} Принято: <b>{approved}</b>\n"
+        f"{E11} На проверке: <b>{pending}</b>\n"
+        f"{E3} Заработано: <b>{total_earned:.2f} {CRYPTO_CURRENCY}</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E12} <b>Баланс: {balance:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"━━━━━━━━━━━━━━━",
         reply_markup=kb.profile_menu(),
         parse_mode="HTML"
     )
@@ -96,26 +123,26 @@ async def my_accounts_handler(callback: CallbackQuery):
     accounts = await db.get_user_accounts(callback.from_user.id)
     if not accounts:
         await callback.message.edit_text(
-            "📱 У тебя ещё нет сданных аккаунтов.",
-            reply_markup=kb.back_main()
+            f"{E9} У тебя ещё нет сданных аккаунтов.",
+            reply_markup=kb.back_main(),
+            parse_mode="HTML"
         )
         return
 
     status_map = {
-        'pending': '⏳ Ожидает',
-        'approved': '✅ Принят',
+        'pending': f'{E11} Ожидает',
+        'approved': f'{E10} Принят',
         'rejected': '❌ Отклонён',
         'processing': '🔄 Обработка',
     }
 
-    text = "📱 <b>Твои аккаунты:</b>\n\n"
-    for acc in accounts[:15]:  # показываем последние 15
-        # acc: (id, user_id, phone, status, session_data, submitted_at, price)
+    text = f"{E9} <b>Твои аккаунты:</b>\n\n"
+    for acc in accounts[:15]:
         status = status_map.get(acc[3], acc[3])
         date = acc[5][:10] if acc[5] else "—"
         price = acc[6]
         text += f"📞 <code>{acc[2]}</code> — {status}\n"
-        text += f"   💰 {price:.2f} {CRYPTO_CURRENCY} | 📅 {date}\n\n"
+        text += f"   {E12} {price:.2f} {CRYPTO_CURRENCY} | {E7} {date}\n\n"
 
     await callback.message.edit_text(text, reply_markup=kb.back_main(), parse_mode="HTML")
 
@@ -130,7 +157,7 @@ async def withdraw_start(callback: CallbackQuery, state: FSMContext):
     if balance < MIN_WITHDRAW:
         await callback.message.edit_text(
             f"❌ Минимальная сумма вывода: <b>{MIN_WITHDRAW} {CRYPTO_CURRENCY}</b>\n"
-            f"Твой баланс: <b>{balance:.2f} {CRYPTO_CURRENCY}</b>",
+            f"{E12} Твой баланс: <b>{balance:.2f} {CRYPTO_CURRENCY}</b>",
             reply_markup=kb.profile_menu(),
             parse_mode="HTML"
         )
@@ -138,10 +165,12 @@ async def withdraw_start(callback: CallbackQuery, state: FSMContext):
 
     await state.set_state(WithdrawStates.waiting_amount)
     await callback.message.edit_text(
-        f"💰 <b>Вывод средств</b>\n\n"
-        f"Твой баланс: <b>{balance:.2f} {CRYPTO_CURRENCY}</b>\n"
-        f"Минимум: {MIN_WITHDRAW} {CRYPTO_CURRENCY}\n\n"
-        f"Введи сумму для вывода:",
+        f"{E12} <b>Вывод средств</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"Баланс: <b>{balance:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"Минимум: <b>{MIN_WITHDRAW} {CRYPTO_CURRENCY}</b>\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"Введи сумму для вывода 👇",
         reply_markup=kb.cancel_kb(),
         parse_mode="HTML"
     )
@@ -167,36 +196,36 @@ async def withdraw_amount(message: Message, state: FSMContext, bot: Bot):
 
     if amount > balance:
         await message.answer(
-            f"❌ Недостаточно средств. Баланс: {balance:.2f} {CRYPTO_CURRENCY}",
-            reply_markup=kb.cancel_kb()
+            f"❌ Недостаточно средств\n{E12} Баланс: {balance:.2f} {CRYPTO_CURRENCY}",
+            reply_markup=kb.cancel_kb(),
+            parse_mode="HTML"
         )
         return
 
-    # Создаём заявку
     withdrawal_id = await db.create_withdrawal(message.from_user.id, amount)
     await db.deduct_user_balance(message.from_user.id, amount)
 
     await message.answer(
-        f"✅ Заявка на вывод <b>{amount:.2f} {CRYPTO_CURRENCY}</b> создана!\n"
-        f"Ожидай — администратор обработает её в ближайшее время.",
+        f"{E10} <b>Заявка создана!</b>\n\n"
+        f"{E12} Сумма: <b>{amount:.2f} {CRYPTO_CURRENCY}</b>\n"
+        f"{E11} Ожидай — скоро обработаем",
         reply_markup=kb.main_menu(),
         parse_mode="HTML"
     )
 
-    # Уведомляем админа
     user = message.from_user
     try:
         await bot.send_message(
             ADMIN_ID,
             f"💸 <b>Новая заявка на выплату #{withdrawal_id}</b>\n\n"
-            f"👤 Пользователь: {user.full_name} (@{user.username or '—'})\n"
-            f"🆔 ID: <code>{user.id}</code>\n"
+            f"👤 {user.full_name} (@{user.username or '—'})\n"
+            f"🆔 <code>{user.id}</code>\n"
             f"💰 Сумма: <b>{amount:.2f} {CRYPTO_CURRENCY}</b>",
             parse_mode="HTML",
             reply_markup=kb.admin_withdrawal_actions(withdrawal_id)
         )
-    except Exception as e:
-        logger.error(f"Не удалось уведомить админа: {e}")
+    except Exception as ex:
+        logger.error(f"Не удалось уведомить админа: {ex}")
 
     await state.clear()
 
@@ -207,9 +236,11 @@ async def withdraw_amount(message: Message, state: FSMContext, bot: Bot):
 async def submit_start(callback: CallbackQuery, state: FSMContext):
     await state.set_state(SubmitStates.waiting_phone)
     await callback.message.edit_text(
-        "📱 <b>Сдать аккаунт</b>\n\n"
-        "Введи номер телефона в формате <code>+7XXXXXXXXXX</code>\n\n"
-        "⚠️ Принимаем только российские номера (+7)",
+        f"{E9} <b>Сдача аккаунта</b>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"Введи номер в формате <code>+7XXXXXXXXXX</code>\n\n"
+        f"{E13} Принимаем только RU номера\n"
+        f"━━━━━━━━━━━━━━━",
         reply_markup=kb.cancel_kb(),
         parse_mode="HTML"
     )
@@ -221,19 +252,16 @@ async def submit_phone(message: Message, state: FSMContext, bot: Bot):
 
     if not PHONE_RE.match(phone):
         await message.answer(
-            "❌ Неверный формат. Введи номер как <code>+7XXXXXXXXXX</code>",
+            f"❌ Неверный формат\nВведи номер как <code>+7XXXXXXXXXX</code>",
             reply_markup=kb.cancel_kb(),
             parse_mode="HTML"
         )
         return
 
-    await message.answer("⏳ Отправляю код авторизации...")
+    await message.answer(f"{E11} Отправляю код авторизации...", parse_mode="HTML")
 
-    # Создаём запись аккаунта (цена берётся из настроек)
     price = await db.get_price()
     account_id = await db.create_account(message.from_user.id, phone, price)
-
-    # Запрашиваем код у Telegram
     result = await request_code(phone, account_id, message.from_user.id)
 
     if not result["success"]:
@@ -249,8 +277,13 @@ async def submit_phone(message: Message, state: FSMContext, bot: Bot):
     await state.update_data(account_id=account_id, phone=phone)
 
     await message.answer(
-        f"✅ Код отправлен на <code>{phone}</code>\n\n"
-        f"Введи код из Telegram (формат: <code>12345</code>):",
+        f"{E10} Код отправлен на <code>{phone}</code>\n\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"{E14} Проверь:\n"
+        f"— Сообщения в Telegram\n"
+        f"— SMS если нет других сессий\n"
+        f"━━━━━━━━━━━━━━━\n\n"
+        f"Введи код 👇",
         reply_markup=kb.cancel_kb(),
         parse_mode="HTML"
     )
@@ -268,7 +301,7 @@ async def submit_code_handler(message: Message, state: FSMContext, bot: Bot):
     account_id = data.get("account_id")
     phone = data.get("phone")
 
-    await message.answer("⏳ Проверяю код...")
+    await message.answer(f"{E11} Проверяю код...", parse_mode="HTML")
 
     result = await submit_code(phone, code, message.from_user.id)
 
@@ -276,8 +309,10 @@ async def submit_code_handler(message: Message, state: FSMContext, bot: Bot):
         await state.set_state(SubmitStates.waiting_2fa)
         await db.set_pending_2fa(message.from_user.id)
         await message.answer(
-            "🔐 <b>Требуется двухфакторная аутентификация</b>\n\n"
-            "Введи пароль 2FA от аккаунта:",
+            f"🔐 <b>Требуется 2FA</b>\n\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"Введи пароль двухфакторной аутентификации 👇\n"
+            f"━━━━━━━━━━━━━━━",
             reply_markup=kb.cancel_kb(),
             parse_mode="HTML"
         )
@@ -290,24 +325,21 @@ async def submit_code_handler(message: Message, state: FSMContext, bot: Bot):
         )
         return
 
-    # Успешно — сохраняем сессию
     session = result.get("session")
     await db.update_account_status(account_id, 'pending', session)
 
     price = await db.get_price()
     await message.answer(
-        f"✅ <b>Аккаунт принят!</b>\n\n"
+        f"{E10} <b>Аккаунт принят!</b>\n\n"
         f"📞 Номер: <code>{phone}</code>\n"
-        f"💰 Вознаграждение: <b>{price} {CRYPTO_CURRENCY}</b>\n\n"
-        f"⏳ Выполняю проверку и настройку...",
+        f"{E3} Вознаграждение: <b>{price} {CRYPTO_CURRENCY}</b>\n\n"
+        f"{E11} Выполняю проверку и настройку...",
         parse_mode="HTML"
     )
 
-    # Авто-смена пароля на 0110
     pwd_result = await auto_change_password(session, old_password=None)
     pwd_status = "✅ Пароль установлен (0110)" if pwd_result["success"] else f"⚠️ Пароль: {pwd_result['error']}"
 
-    # Проверка спам-блока
     spam_result = await check_spam_block(session)
     if spam_result["success"]:
         spam_status = "🚫 ЗАБЛОКИРОВАН" if spam_result["blocked"] else "✅ Чистый"
@@ -317,15 +349,14 @@ async def submit_code_handler(message: Message, state: FSMContext, bot: Bot):
         spam_detail = ""
 
     await message.answer(
-        f"📋 <b>Итог обработки:</b>\n\n"
+        f"{E8} <b>Итог обработки:</b>\n\n"
         f"🔒 {pwd_status}\n"
         f"📊 Спам-блок: {spam_status}\n\n"
-        f"Ожидай финальной проверки администратором.",
+        f"{E11} Ожидай финальной проверки администратором.",
         reply_markup=kb.main_menu(),
         parse_mode="HTML"
     )
 
-    # Уведомляем админа с результатами проверок
     try:
         await bot.send_message(
             ADMIN_ID,
@@ -339,8 +370,8 @@ async def submit_code_handler(message: Message, state: FSMContext, bot: Bot):
             parse_mode="HTML",
             reply_markup=kb.admin_account_actions(account_id, phone)
         )
-    except Exception as e:
-        logger.error(f"Не удалось уведомить админа: {e}")
+    except Exception as ex:
+        logger.error(f"Не удалось уведомить админа: {ex}")
 
     await state.clear()
 
@@ -352,7 +383,7 @@ async def submit_2fa_handler(message: Message, state: FSMContext, bot: Bot):
     account_id = data.get("account_id")
     phone = data.get("phone")
 
-    await message.answer("⏳ Проверяю пароль...")
+    await message.answer(f"{E11} Проверяю пароль...", parse_mode="HTML")
 
     result = await submit_2fa(phone, password, message.from_user.id)
 
@@ -368,18 +399,16 @@ async def submit_2fa_handler(message: Message, state: FSMContext, bot: Bot):
 
     price = await db.get_price()
     await message.answer(
-        f"✅ <b>Аккаунт принят!</b>\n\n"
+        f"{E10} <b>Аккаунт принят!</b>\n\n"
         f"📞 Номер: <code>{phone}</code>\n"
-        f"💰 Вознаграждение: <b>{price} {CRYPTO_CURRENCY}</b>\n\n"
-        f"⏳ Выполняю проверку и настройку...",
+        f"{E3} Вознаграждение: <b>{price} {CRYPTO_CURRENCY}</b>\n\n"
+        f"{E11} Выполняю проверку и настройку...",
         parse_mode="HTML"
     )
 
-    # Авто-смена пароля: старый пароль был у юзера, меняем на 0110
     pwd_result = await auto_change_password(session, old_password=password)
     pwd_status = "✅ Пароль изменён на 0110" if pwd_result["success"] else f"⚠️ Пароль: {pwd_result['error']}"
 
-    # Проверка спам-блока
     spam_result = await check_spam_block(session)
     if spam_result["success"]:
         spam_status = "🚫 ЗАБЛОКИРОВАН" if spam_result["blocked"] else "✅ Чистый"
@@ -389,10 +418,10 @@ async def submit_2fa_handler(message: Message, state: FSMContext, bot: Bot):
         spam_detail = ""
 
     await message.answer(
-        f"📋 <b>Итог обработки:</b>\n\n"
+        f"{E8} <b>Итог обработки:</b>\n\n"
         f"🔒 {pwd_status}\n"
         f"📊 Спам-блок: {spam_status}\n\n"
-        f"Ожидай финальной проверки администратором.",
+        f"{E11} Ожидай финальной проверки администратором.",
         reply_markup=kb.main_menu(),
         parse_mode="HTML"
     )
@@ -410,8 +439,8 @@ async def submit_2fa_handler(message: Message, state: FSMContext, bot: Bot):
             parse_mode="HTML",
             reply_markup=kb.admin_account_actions(account_id, phone)
         )
-    except Exception as e:
-        logger.error(f"Не удалось уведомить админа: {e}")
+    except Exception as ex:
+        logger.error(f"Не удалось уведомить админа: {ex}")
 
     await state.clear()
 
@@ -421,10 +450,10 @@ async def submit_2fa_handler(message: Message, state: FSMContext, bot: Bot):
 @router.callback_query(F.data == "back_main")
 async def back_main(callback: CallbackQuery, state: FSMContext):
     await state.clear()
-    user = callback.from_user
     await callback.message.edit_text(
-        f"👋 Главное меню\n\nВыбери действие:",
-        reply_markup=kb.main_menu()
+        f"{E1} Главное меню\n\nВыбери действие 👇",
+        reply_markup=kb.main_menu(),
+        parse_mode="HTML"
     )
 
 
@@ -432,6 +461,8 @@ async def back_main(callback: CallbackQuery, state: FSMContext):
 async def cancel_handler(callback: CallbackQuery, state: FSMContext):
     await state.clear()
     await callback.message.edit_text(
-        "❌ Отменено. Главное меню:",
-        reply_markup=kb.main_menu()
+        f"❌ Отменено\n\n{E1} Главное меню:",
+        reply_markup=kb.main_menu(),
+        parse_mode="HTML"
     )
+    
